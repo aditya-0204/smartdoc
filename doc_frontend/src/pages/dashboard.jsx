@@ -44,9 +44,8 @@ const Dashboard = () => {
                   {({ active }) => (
                     <button
                       onClick={toggleDarkMode}
-                      className={`${
-                        active ? "bg-gray-100 dark:bg-gray-600" : ""
-                      } flex items-center w-full px-4 py-2 text-sm`}
+                      className={`${active ? "bg-gray-100 dark:bg-gray-600" : ""
+                        } flex items-center w-full px-4 py-2 text-sm`}
                     >
                       {darkMode ? (
                         <>
@@ -67,9 +66,8 @@ const Dashboard = () => {
                   {({ active }) => (
                     <button
                       onClick={handleLogout}
-                      className={`${
-                        active ? "bg-gray-100 dark:bg-gray-600" : ""
-                      } flex items-center w-full px-4 py-2 text-sm text-red-600 dark:text-red-400`}
+                      className={`${active ? "bg-gray-100 dark:bg-gray-600" : ""
+                        } flex items-center w-full px-4 py-2 text-sm text-red-600 dark:text-red-400`}
                     >
                       <ArrowRightOnRectangleIcon className="w-5 h-5 mr-2" />
                       Logout
