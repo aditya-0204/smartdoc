@@ -5,7 +5,7 @@ import { Features } from "./components/Features";
 import { AuthModal } from "./components/AuthModal";
 import { DocumentDemo } from "./components/DocumentDemo";
 import { Dashboard } from "./components/Dashboard";
-import { sampleDocs as initialDocs } from "./data/documents";
+
 
 export default function App() {
   // Initialize user state from localStorage for session persistence
@@ -14,7 +14,12 @@ export default function App() {
     return savedUser ? JSON.parse(savedUser) : null;
   });
 
-  const [docs, setDocs] = useState(initialDocs);
+  // Store all documents in localStorage, filter by user
+  const [docs, setDocs] = useState(() => {
+    const allDocs = JSON.parse(localStorage.getItem('smartdoc_docs') || '[]');
+    if (!user) return [];
+    return allDocs.filter(doc => doc.userEmail === user.email);
+  });
   const [isModalOpen, setModalOpen] = useState(false);
 
   // Initialize theme from localStorage or OS preference
@@ -46,6 +51,25 @@ export default function App() {
   const handleAuth = (isLogin, formData) => {
     // Get our "user database" from localStorage, or start with an empty array
     const users = JSON.parse(localStorage.getItem('smartdoc_users')) || [];
+
+    // Google login/signup flow
+    if (formData.google) {
+      let foundUser = users.find(u => u.email === formData.email);
+      if (!foundUser) {
+        // Auto-register Google user
+        foundUser = {
+          name: formData.name || "Google User",
+          email: formData.email,
+          password: '',
+          google: true
+        };
+        const updatedUsers = [...users, foundUser];
+        localStorage.setItem('smartdoc_users', JSON.stringify(updatedUsers));
+      }
+      setUser({ name: formData.name, email: formData.email });
+      setModalOpen(false);
+      return;
+    }
 
     if (isLogin) {
       // --- LOGIN LOGIC ---
@@ -92,14 +116,36 @@ export default function App() {
     setUser(null);
   };
 
+
   const handleAddDocument = (newDoc) => {
-    setDocs((currentDocs) => [newDoc, ...currentDocs]);
+    // Attach user email to the document
+    const docWithUser = { ...newDoc, userEmail: user.email };
+    // Save to all docs in localStorage
+    const allDocs = JSON.parse(localStorage.getItem('smartdoc_docs') || '[]');
+    const updatedDocs = [docWithUser, ...allDocs];
+    localStorage.setItem('smartdoc_docs', JSON.stringify(updatedDocs));
+    // Update state for current user only
+    setDocs(updatedDocs.filter(doc => doc.userEmail === user.email));
   };
+
 
   const handleDeleteDocument = (docId) => {
-    setDocs((currentDocs) => currentDocs.filter(doc => doc.id !== docId));
+    const allDocs = JSON.parse(localStorage.getItem('smartdoc_docs') || '[]');
+    const updatedDocs = allDocs.filter(doc => doc.id !== docId);
+    localStorage.setItem('smartdoc_docs', JSON.stringify(updatedDocs));
+    setDocs(updatedDocs.filter(doc => doc.userEmail === user.email));
   };
 
+
+  // When user changes (login/logout), update docs for that user
+  useEffect(() => {
+    if (user) {
+      const allDocs = JSON.parse(localStorage.getItem('smartdoc_docs') || '[]');
+      setDocs(allDocs.filter(doc => doc.userEmail === user.email));
+    } else {
+      setDocs([]);
+    }
+  }, [user]);
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-200 font-sans transition-colors duration-300">
