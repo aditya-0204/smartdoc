@@ -3,8 +3,10 @@ import { Header } from "./components/Header";
 import { Footer } from "./components/Footer";
 import { Features } from "./components/Features";
 import { AuthModal } from "./components/AuthModal";
+
 import { DocumentDemo } from "./components/DocumentDemo";
 import { Dashboard } from "./components/Dashboard";
+import { sampleDocs } from "./data/documents";
 
 
 export default function App() {
@@ -183,7 +185,7 @@ export default function App() {
                   Get Started For Free
                 </button>
               </div>
-              <DocumentDemo docs={docs} onAddDocument={handleAddDocument} />
+              <DocumentDemo docs={sampleDocs} onAddDocument={handleAddDocument} />
             </section>
             <Features />
           </>

@@ -3,34 +3,36 @@ import React, { useMemo, useState } from "react";
 import { DocumentTable } from "./DocumentTable";
 import { OcrUploader } from "./OcrUploader";
 import { getDocumentStatus } from "../utils/dateUtils";
-import { sendDataToBackend } from "../utils/api";
+import { sendDocumentToLambda } from "../utils/lambdaApi";
 
 export const Dashboard = ({ user, docs, onDeleteDocument, onAddDocument }) => {
   const [scannedPreview, setScannedPreview] = useState(null);
 
   const handleScanComplete = async (scannedData) => {
-    setScannedPreview(scannedData); // ✅ Show OCR preview
+  setScannedPreview(scannedData);
 
-    const newDoc = {
-      id: scannedData.id || `doc-${Date.now()}`,
-      userEmail: user?.email,
-      name: scannedData.name || scannedData.type || "Untitled",
-      docNumber:
-        scannedData.docNumber ||
-        scannedData.number ||
-        scannedData.id ||
-        "N/A",
-      documentType: scannedData.type,
-      expiry: scannedData.expiry,
-    };
-
-    try {
-      await sendDataToBackend(newDoc);
-      onAddDocument(newDoc);
-    } catch (error) {
-      console.error("Failed to save document:", error);
-    }
+  const newDoc = {
+    id: scannedData.id || `doc-${Date.now()}`,
+    userEmail: user?.email, // logged-in user email
+    name: scannedData.name || scannedData.type || "Untitled",
+    docNumber: scannedData.docNumber || scannedData.number || scannedData.id || "N/A",
+    documentType: scannedData.type,
+    expiry: scannedData.expiry,
+    
   };
+
+  try {
+    // ✅ Call Lambda to store document and send email
+    console.log("Sending document to Lambda:", newDoc, "user email:", user?.email);
+
+    await sendDocumentToLambda(newDoc, user?.email);
+
+    // ✅ Add document to frontend state
+    onAddDocument(newDoc);
+  } catch (error) {
+    console.error("Failed to send document to Lambda:", error);
+  }
+};
 
   // ✅ Stats calculation for Total / Expiring Soon / Expired
   const stats = useMemo(() => {

@@ -22,6 +22,8 @@ const parseDocumentName = (text) => {
   if (lowerText.includes('aadhaar')) return 'Aadhaar Card';
   if (lowerText.includes('insurance')) return 'Insurance Policy';
   if (lowerText.includes('id card')) return 'ID Card';
+  if (lowerText.includes('Driving License')) return 'Driving License';
+  if (lowerText.includes('voter id')) return 'Voter ID';
   return 'Scanned Document';
 };
 
@@ -165,6 +167,7 @@ export const OcrUploader = ({ onScanComplete }) => {
         name: docName,
         expiry: expiryDate || 'N/A',
         docNumber: docNumber || 'N/A',
+        type: docName,
       });
     }
   };
