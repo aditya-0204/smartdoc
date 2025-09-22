@@ -13,7 +13,7 @@ export const Header = ({ user, onLoginClick, onLogout, theme, toggleTheme }) => 
           <div className="bg-blue-600 text-white rounded-md px-3 py-2 font-bold text-lg">SD</div>
           <div>
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">SmartDoc</h1>
-            <p className="text-xs text-gray-500 dark:text-gray-400">AI-Powered Document Management</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Smart Document Management</p>
           </div>
         </div>
 
