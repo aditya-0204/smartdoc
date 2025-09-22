@@ -25,11 +25,12 @@ const parseDocumentName = (text) => {
   if (lowerText.includes('Driving License')) return 'Driving License';
   if (lowerText.includes('voter id')) return 'Voter ID';
   if (lowerText.includes('docNumber')) return 'docNumber';
+  if (lowerText.includes('Pan card')) return 'pan card';
   return 'Scanned Document';
 };
 
 const parseExpiryDate = (text) => {
-  const match = text.match(/(?:Valid upto|Validity|Valid through|Expiry)[\s—:-]*?(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sep|october|oct|november|nov|december|dec)[\s-]*(\d{4})/i);
+  const match = text.match(/(?:Valid upto|Validity|Valid through|Expiry| Expiry date:-)[\s—:-]*?(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sep|october|oct|november|nov|december|dec)[\s-]*(\d{4})/i);
   if (match) {
     const month = monthMap[match[1].toLowerCase()];
     const year = match[2];
