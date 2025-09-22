@@ -176,7 +176,7 @@ export default function App() {
                   SmartDoc — Secure, Smart Document Management
                 </h2>
                 <p className="text-lg text-gray-600 dark:text-gray-400 mb-8">
-                  Upload, scan, and securely manage your documents with AI-powered reminders.
+                  Upload, scan, and securely manage your documents with reminders.
                 </p>
                 <button
                   onClick={() => setModalOpen(true)}
