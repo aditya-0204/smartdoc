@@ -24,6 +24,7 @@ const parseDocumentName = (text) => {
   if (lowerText.includes('id card')) return 'ID Card';
   if (lowerText.includes('Driving License')) return 'Driving License';
   if (lowerText.includes('voter id')) return 'Voter ID';
+  if (lowerText.includes('docNumber')) return 'docNumber';
   return 'Scanned Document';
 };
 
