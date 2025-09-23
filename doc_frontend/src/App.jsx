@@ -117,18 +117,23 @@ export default function App() {
   const handleLogout = () => {
     setUser(null);
   };
+  const [demoDocs, setDemoDocs] = useState(sampleDocs);
 
 
-  const handleAddDocument = (newDoc) => {
-    // Attach user email to the document
-    const docWithUser = { ...newDoc, userEmail: user.email };
-    // Save to all docs in localStorage
-    const allDocs = JSON.parse(localStorage.getItem('smartdoc_docs') || '[]');
-    const updatedDocs = [docWithUser, ...allDocs];
-    localStorage.setItem('smartdoc_docs', JSON.stringify(updatedDocs));
-    // Update state for current user only
-    setDocs(updatedDocs.filter(doc => doc.userEmail === user.email));
+  const handleAddDocument = (newDoc, isLoggedInUser) => {
+    if (isLoggedInUser) {
+      // attach user email for persistence
+      const docWithUser = { ...newDoc, userEmail: user.email };
+      const allDocs = JSON.parse(localStorage.getItem('smartdoc_docs') || '[]');
+      const updatedDocs = [docWithUser, ...allDocs];
+      localStorage.setItem('smartdoc_docs', JSON.stringify(updatedDocs));
+      setDocs(updatedDocs.filter((doc) => doc.userEmail === user.email));
+    } else {
+      // demo mode (not logged in) → just show temporarily
+      setDocs((prevDocs) => [newDoc, ...prevDocs]);
+    }
   };
+
 
 
   const handleDeleteDocument = (docId) => {
@@ -185,7 +190,16 @@ export default function App() {
                   Get Started For Free
                 </button>
               </div>
-              <DocumentDemo docs={sampleDocs} onAddDocument={handleAddDocument} />
+              <DocumentDemo
+                docs={user ? docs : demoDocs}
+                onAddDocument={(newDoc) => {
+                  if (user) {
+                    handleAddDocument(newDoc, true);
+                  } else {
+                    setDemoDocs(prev => [newDoc, ...prev]);
+                  }
+                }}
+              />
             </section>
             <Features />
           </>
