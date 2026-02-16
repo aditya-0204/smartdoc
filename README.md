@@ -79,7 +79,7 @@ SmartDoc is a **cloud-based document expiry reminder system** built using AWS se
 
 ### 1️⃣ Clone the repository
 ```bash
-git clone https://github.com/your-username/smartdoc.git
+git clone https://github.com/aditya-0204/smartdoc.git
 cd smartdoc
 Install dependencies
 npm install
