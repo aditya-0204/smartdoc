@@ -93,17 +93,18 @@ app.delete("/api/documents/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Check karein agar MongoDB ObjectID match ho ya custom id string
     let deletedDoc = null;
     if (mongoose.Types.ObjectId.isValid(id)) {
       deletedDoc = await Document.findByIdAndDelete(id);
     } else {
-      // Agar frontend se custom string id (e.g. doc-173000000) aayi ho
-      deletedDoc = await Document.findOneAndDelete({ id: id });
+      // Custom id ya _id string match
+      deletedDoc = await Document.findOneAndDelete({
+        $or: [{ id: id }, { documentId: id }]
+      });
     }
 
     if (!deletedDoc) {
-      return res.status(404).json({ error: "Document not found" });
+      return res.status(404).json({ error: "Document not found in database" });
     }
 
     console.log(`Document deleted successfully: ${id}`);
