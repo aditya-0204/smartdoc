@@ -3,7 +3,7 @@
 // ✅ Exported properly so Dashboard.jsx can import it
 export async function sendDataToBackend(documentData) {
   const apiUrl =
-    "http://localhost:5000/api/documents";
+    "https://smartdoc-nj3x.onrender.com/api/documents";
 
   console.log("📡 Sending data to backend:", JSON.stringify(documentData));
 
@@ -20,10 +20,9 @@ export async function sendDataToBackend(documentData) {
     const result = await response.json();
 
     if (response.ok) {
-      console.log("✅ Success:", result);
       alert("Document saved and notifications have been scheduled!");
     } else {
-      console.error("❌ Error from backend:", result);
+      console.error("Error from backend:", result);
       alert(`There was an error: ${result.message}`);
     }
   } catch (error) {

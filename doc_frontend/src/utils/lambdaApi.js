@@ -1,7 +1,7 @@
 export const sendDocumentToLambda = async (document, userEmail) => {
   try {
     // Call the local backend API
-    const response = await fetch("http://localhost:5000/api/documents", {
+    const response = await fetch("https://smartdoc-nj3x.onrender.com/api/documents", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

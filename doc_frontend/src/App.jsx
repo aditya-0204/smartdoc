@@ -8,31 +8,40 @@ import { DocumentDemo } from "./components/DocumentDemo";
 import { Dashboard } from "./components/Dashboard";
 import { sampleDocs } from "./data/documents";
 
-const API_BASE_URL = "http://localhost:5000";
+const API_BASE_URL = "https://smartdoc-nj3x.onrender.com";
 
 export default function App() {
-  // Initialize user state from localStorage for session persistence
+  // 1. User state
   const [user, setUser] = useState(() => {
-    const savedUser = localStorage.getItem("user");
-    return savedUser ? JSON.parse(savedUser) : null;
+    try {
+      const savedUser = localStorage.getItem("user");
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
   });
 
-  // Store all documents in localStorage, filter by user
+  // 2. Documents state - Direct local fallback taaki UI instant render ho bina blank hue
   const [docs, setDocs] = useState(() => {
-    const allDocs = JSON.parse(localStorage.getItem("smartdoc_docs") || "[]");
-    if (!user) return [];
-    return allDocs.filter((doc) => doc.userEmail === user.email);
+    try {
+      const allDocs = JSON.parse(localStorage.getItem("smartdoc_docs") || "[]");
+      const savedUser = JSON.parse(localStorage.getItem("user") || "null");
+      if (!savedUser) return [];
+      return allDocs.filter((doc) => doc.userEmail === savedUser.email);
+    } catch {
+      return [];
+    }
   });
+
   const [isModalOpen, setModalOpen] = useState(false);
 
-  // Initialize theme from localStorage or OS preference
+  // 3. Theme persistence
   const [theme, setTheme] = useState(() => {
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme) return savedTheme;
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   });
 
-  // Effect for theme persistence
   useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove(theme === "light" ? "dark" : "light");
@@ -40,16 +49,36 @@ export default function App() {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  // Effect for user session persistence
+  // 4. Fetch docs directly from MongoDB on login / reload (Normalizes _id to id)
   useEffect(() => {
-    if (user) {
-      localStorage.setItem("user", JSON.stringify(user));
-    } else {
-      localStorage.removeItem("user");
-    }
+    const fetchDocuments = async () => {
+      if (!user || !user.email) return;
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/documents?email=${encodeURIComponent(user.email)}`);
+        if (res.ok) {
+          const rawData = await res.json();
+          const items = Array.isArray(rawData) ? rawData : (rawData.data || []);
+          
+          // ID normalization taaki Dashboard/UI components break na hon
+          const normalized = items.map((doc) => ({
+            ...doc,
+            id: doc.id || doc._id,
+            _id: doc._id || doc.id
+          }));
+
+          setDocs(normalized);
+          localStorage.setItem("smartdoc_docs", JSON.stringify(normalized));
+        }
+      } catch (err) {
+        console.error("Error fetching docs from MongoDB:", err);
+      }
+    };
+
+    fetchDocuments();
   }, [user]);
 
-  // --- Main Authentication Handler ---
+  // Auth Handler
   const handleAuth = (isLogin, formData) => {
     const users = JSON.parse(localStorage.getItem("smartdoc_users")) || [];
 
@@ -65,7 +94,9 @@ export default function App() {
         const updatedUsers = [...users, foundUser];
         localStorage.setItem("smartdoc_users", JSON.stringify(updatedUsers));
       }
-      setUser({ name: formData.name, email: formData.email });
+      const userData = { name: formData.name, email: formData.email };
+      setUser(userData);
+      localStorage.setItem("user", JSON.stringify(userData));
       setModalOpen(false);
       return;
     }
@@ -73,7 +104,9 @@ export default function App() {
     if (isLogin) {
       const foundUser = users.find((u) => u.email === formData.email);
       if (foundUser && foundUser.password === formData.password) {
-        setUser({ name: foundUser.name, email: foundUser.email });
+        const userData = { name: foundUser.name, email: foundUser.email };
+        setUser(userData);
+        localStorage.setItem("user", JSON.stringify(userData));
         setModalOpen(false);
       } else {
         alert("Invalid email or password.");
@@ -91,6 +124,7 @@ export default function App() {
         const updatedUsers = [...users, newUser];
         localStorage.setItem("smartdoc_users", JSON.stringify(updatedUsers));
         setUser({ name: newUser.name, email: newUser.email });
+        localStorage.setItem("user", JSON.stringify({ name: newUser.name, email: newUser.email }));
         setModalOpen(false);
       }
     }
@@ -98,53 +132,77 @@ export default function App() {
 
   const handleLogout = () => {
     setUser(null);
+    localStorage.removeItem("user");
+    setDocs([]);
   };
 
-  const handleAddDocument = (newDoc) => {
-    const docWithUser = { ...newDoc, userEmail: user.email };
-    const allDocs = JSON.parse(localStorage.getItem("smartdoc_docs") || "[]");
-    const updatedDocs = [docWithUser, ...allDocs];
-    localStorage.setItem("smartdoc_docs", JSON.stringify(updatedDocs));
-    setDocs(updatedDocs.filter((doc) => doc.userEmail === user.email));
-  };
+  // Add Document (POST to Atlas)
+const [isSubmitting, setIsSubmitting] = useState(false);
+const handleAddDocument = async (newDocData) => {
+  if (!user?.email) return;
+  if (isSubmitting) return;
+  try {
+    setIsSubmitting(true);
+    const response = await fetch(`${API_BASE_URL}/api/documents`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ...newDocData,
+        userEmail: user.email,
+      }),
+    });
 
-  // --- UPDATED: Delete document with Backend API call ---
-  const handleDeleteDocument = async (docId) => {
+    if (!response.ok) {
+      throw new Error("Failed to save document on database");
+    }
+
+    const resData = await response.json();
+    const rawDoc = resData.data || resData;
+
+    const savedDoc = {
+      ...rawDoc,
+      id: rawDoc._id || rawDoc.id,
+      _id: rawDoc._id || rawDoc.id,
+    };
+
+    setDocs((prevDocs) => {
+      const exists = prevDocs.some((d) => (d._id || d.id) === savedDoc.id);
+      if (exists) return prevDocs;
+      const updated = [savedDoc, ...prevDocs];
+      localStorage.setItem("smartdoc_docs", JSON.stringify(updated));
+      return updated;
+    });
+  } catch (error) {
+    console.error("Add Document Error:", error);
+    alert("Server par document save nahi ho paya.");
+  } finally {
+    setIsSubmitting(false); 
+  }
+};
+
+  // Delete Document (DELETE on Atlas)
+  const handleDeleteDocument = async (id) => {
     try {
-      // 1. Send DELETE request to Express backend
-      const response = await fetch(`${API_BASE_URL}/api/documents/${docId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/documents/${id}`, {
         method: "DELETE",
       });
 
-      if (!response.ok) {
+      if (!response.ok && response.status !== 404) {
         throw new Error(`Failed to delete document on server. Status: ${response.status}`);
       }
 
-      // 2. Synchronize localStorage
       const allDocs = JSON.parse(localStorage.getItem("smartdoc_docs") || "[]");
-      const updatedDocs = allDocs.filter(
-        (doc) => (doc.id || doc._id) !== docId
-      );
+      const updatedDocs = allDocs.filter((doc) => (doc.id || doc._id) !== id);
       localStorage.setItem("smartdoc_docs", JSON.stringify(updatedDocs));
 
-      // 3. Update React UI state
-      setDocs(updatedDocs.filter((doc) => doc.userEmail === user.email));
-      console.log(`Successfully deleted document: ${docId}`);
+      setDocs((prev) => prev.filter((doc) => (doc.id || doc._id) !== id));
     } catch (error) {
       console.error("Delete error:", error);
-      alert("Failed to delete document from the server. Please check if the backend is running.");
+      alert("Delete failed. Please check network/backend.");
     }
   };
-
-  // When user changes (login/logout), update docs for that user
-  useEffect(() => {
-    if (user) {
-      const allDocs = JSON.parse(localStorage.getItem("smartdoc_docs") || "[]");
-      setDocs(allDocs.filter((doc) => doc.userEmail === user.email));
-    } else {
-      setDocs([]);
-    }
-  }, [user]);
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-200 font-sans transition-colors duration-300">

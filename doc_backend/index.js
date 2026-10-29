@@ -23,12 +23,24 @@ mongoose
   .catch((err) => console.error("MongoDB Connection Error:", err.message));
 
 // Nodemailer Setup (Port 465 SSL for Render stability)
+// index.js transporter configuration:
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true, // true for port 465
   auth: {
     user: process.env.GMAIL_EMAIL,
-    pass: process.env.GMAIL_PASSWORD, // 16-character App Password
+    pass: process.env.GMAIL_PASSWORD, // 16-digit Google App Password
   },
+  tls: {
+    rejectUnauthorized: false, // TLS handshake issues bypass
+  },
+  pool: true,
+  maxConnections: 1,
+  rateLimit: 1, 
+  connectionTimeout: 20000, // 20s
+  greetingTimeout: 20000,
+  socketTimeout: 30000,
 });
 transporter.verify((error, success) => {
   if (error) {
