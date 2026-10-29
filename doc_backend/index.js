@@ -50,6 +50,9 @@ app.post("/api/documents", async (req, res) => {
   try {
     const { userEmail, name, title, docNumber, expiry, expiryDate } = req.body;
 
+    // 🚦 DETECT LOAD TEST MODE
+    const isTestMode = req.headers['x-test-mode'] === 'true';
+
     if (!userEmail) {
       return res.status(400).json({ error: "userEmail is required" });
     }
@@ -67,11 +70,12 @@ app.post("/api/documents", async (req, res) => {
     });
 
     if (recentDuplicate) {
-      console.log("⚠️ Prevented duplicate document creation.");
+      // Do not log "Prevented duplicate" loudly during load tests to avoid spamming server logs
+      if (!isTestMode) console.log("⚠️ Prevented duplicate document creation.");
       return res.status(200).json(recentDuplicate); 
     }
 
-    // 1. Save to MongoDB Atlas
+    // 1. Save to MongoDB Atlas (This will execute for both real users and k6 tests)
     const newDoc = await Document.create({
       userEmail,
       name: documentName,
@@ -79,10 +83,10 @@ app.post("/api/documents", async (req, res) => {
       expiry: documentExpiry,
     });
 
-    console.log("Document saved:", newDoc._id);
+    if (!isTestMode) console.log("Document saved:", newDoc._id);
 
-    // 2. Email trigger via Brevo API (No timeout issues on Render)
-    if (process.env.BREVO_API_KEY) {
+    // 2. Email trigger via Brevo API (Skips if x-test-mode is true)
+    if (process.env.BREVO_API_KEY && !isTestMode) {
       fetch("https://api.brevo.com/v3/smtp/email", {
         method: "POST",
         headers: {
@@ -119,6 +123,9 @@ app.post("/api/documents", async (req, res) => {
         }
       })
       .catch(err => console.error("❌ Brevo Fetch Error:", err));
+    } else if (isTestMode) {
+      // Confirms the load test hit the endpoint without sending an email
+      console.log(`⚠️ Load Test Document Saved (${newDoc._id}): Brevo email skipped.`);
     } else {
       console.warn("⚠️ BREVO_API_KEY is missing in Environment Variables.");
     }
@@ -188,4 +195,4 @@ app.post("/login", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5173;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
