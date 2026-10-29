@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Header } from "./components/Header";
 import { Footer } from "./components/Footer";
 import { Features } from "./components/Features";
@@ -21,7 +21,7 @@ export default function App() {
     }
   });
 
-  // 2. Documents state - Direct local fallback taaki UI instant render ho bina blank hue
+  // 2. Documents state
   const [docs, setDocs] = useState(() => {
     try {
       const allDocs = JSON.parse(localStorage.getItem("smartdoc_docs") || "[]");
@@ -34,6 +34,7 @@ export default function App() {
   });
 
   const [isModalOpen, setModalOpen] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   // 3. Theme persistence
   const [theme, setTheme] = useState(() => {
@@ -49,7 +50,7 @@ export default function App() {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  // 4. Fetch docs directly from MongoDB on login / reload (Normalizes _id to id)
+  // 4. Fetch docs directly from MongoDB on login / reload with Deduplication
   useEffect(() => {
     const fetchDocuments = async () => {
       if (!user || !user.email) return;
@@ -60,15 +61,26 @@ export default function App() {
           const rawData = await res.json();
           const items = Array.isArray(rawData) ? rawData : (rawData.data || []);
           
-          // ID normalization taaki Dashboard/UI components break na hon
-          const normalized = items.map((doc) => ({
-            ...doc,
-            id: doc.id || doc._id,
-            _id: doc._id || doc.id
-          }));
+          // ID normalization & strict deduplication by ID
+          const seenIds = new Set();
+          const uniqueDocs = [];
 
-          setDocs(normalized);
-          localStorage.setItem("smartdoc_docs", JSON.stringify(normalized));
+          items.forEach((doc) => {
+            const docId = String(doc._id || doc.id);
+            if (!seenIds.has(docId)) {
+              seenIds.add(docId);
+              uniqueDocs.push({
+                ...doc,
+                id: docId,
+                _id: docId,
+                name: doc.name || doc.title || "Document",
+                expiry: doc.expiry || doc.expiryDate || "N/A"
+              });
+            }
+          });
+
+          setDocs(uniqueDocs);
+          localStorage.setItem("smartdoc_docs", JSON.stringify(uniqueDocs));
         }
       } catch (err) {
         console.error("Error fetching docs from MongoDB:", err);
@@ -136,56 +148,70 @@ export default function App() {
     setDocs([]);
   };
 
-  // Add Document (POST to Atlas)
-const [isSubmitting, setIsSubmitting] = useState(false);
-const handleAddDocument = async (newDocData) => {
-  if (!user?.email) return;
-  if (isSubmitting) return;
-  try {
-    setIsSubmitting(true);
-    const response = await fetch(`${API_BASE_URL}/api/documents`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        ...newDocData,
+  // Add Document (POST to Atlas) - Double click block via ref
+  const handleAddDocument = async (newDocData) => {
+    if (!user?.email) return;
+    
+    // Synchronous immediate lock
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+
+    try {
+      const payload = {
         userEmail: user.email,
-      }),
-    });
+        name: newDocData.name || newDocData.title,
+        title: newDocData.name || newDocData.title,
+        docNumber: newDocData.docNumber || "N/A",
+        expiry: newDocData.expiry || newDocData.expiryDate || "N/A",
+        expiryDate: newDocData.expiry || newDocData.expiryDate || "N/A",
+      };
 
-    if (!response.ok) {
-      throw new Error("Failed to save document on database");
+      const response = await fetch(`${API_BASE_URL}/api/documents`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save document on database");
+      }
+
+      const resData = await response.json();
+      const rawDoc = resData.data || resData;
+      const docId = String(rawDoc._id || rawDoc.id);
+
+      const savedDoc = {
+        ...rawDoc,
+        id: docId,
+        _id: docId,
+      };
+
+      setDocs((prevDocs) => {
+        // Prevent adding if already present in state
+        const exists = prevDocs.some((d) => String(d._id || d.id) === docId);
+        if (exists) return prevDocs;
+        const updated = [savedDoc, ...prevDocs];
+        localStorage.setItem("smartdoc_docs", JSON.stringify(updated));
+        return updated;
+      });
+    } catch (error) {
+      console.error("Add Document Error:", error);
+      alert("Server par document save nahi ho paya.");
+    } finally {
+      // Small cooldown delay before releasing lock
+      setTimeout(() => {
+        isSubmittingRef.current = false;
+      }, 800);
     }
-
-    const resData = await response.json();
-    const rawDoc = resData.data || resData;
-
-    const savedDoc = {
-      ...rawDoc,
-      id: rawDoc._id || rawDoc.id,
-      _id: rawDoc._id || rawDoc.id,
-    };
-
-    setDocs((prevDocs) => {
-      const exists = prevDocs.some((d) => (d._id || d.id) === savedDoc.id);
-      if (exists) return prevDocs;
-      const updated = [savedDoc, ...prevDocs];
-      localStorage.setItem("smartdoc_docs", JSON.stringify(updated));
-      return updated;
-    });
-  } catch (error) {
-    console.error("Add Document Error:", error);
-    alert("Server par document save nahi ho paya.");
-  } finally {
-    setIsSubmitting(false); 
-  }
-};
+  };
 
   // Delete Document (DELETE on Atlas)
   const handleDeleteDocument = async (id) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/documents/${id}`, {
+      const targetId = String(id);
+      const response = await fetch(`${API_BASE_URL}/api/documents/${targetId}`, {
         method: "DELETE",
       });
 
@@ -194,10 +220,10 @@ const handleAddDocument = async (newDocData) => {
       }
 
       const allDocs = JSON.parse(localStorage.getItem("smartdoc_docs") || "[]");
-      const updatedDocs = allDocs.filter((doc) => (doc.id || doc._id) !== id);
+      const updatedDocs = allDocs.filter((doc) => String(doc.id || doc._id) !== targetId);
       localStorage.setItem("smartdoc_docs", JSON.stringify(updatedDocs));
 
-      setDocs((prev) => prev.filter((doc) => (doc.id || doc._id) !== id));
+      setDocs((prev) => prev.filter((doc) => String(doc.id || doc._id) !== targetId));
     } catch (error) {
       console.error("Delete error:", error);
       alert("Delete failed. Please check network/backend.");
