@@ -3,7 +3,6 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
-const { Resend } = require("resend");
 
 const User = require("./models/User");
 const Document = require("./models/Document");
@@ -11,9 +10,6 @@ const Document = require("./models/Document");
 const app = express();
 app.use(cors());
 app.use(express.json());
-
-// Resend Initialization
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 // MongoDB Connection
 mongoose
@@ -49,7 +45,6 @@ app.get("/api/documents", async (req, res) => {
   }
 });
 
-// ======================== ADD DOCUMENT & NOTIFY ========================
 // ======================== ADD DOCUMENT & NOTIFY ========================
 app.post("/api/documents", async (req, res) => {
   try {
