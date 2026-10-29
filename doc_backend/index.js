@@ -1,105 +1,162 @@
-// doc_backend/index.js
+require("dotenv").config();
 const express = require("express");
-const mysql = require("mysql2");
+const mongoose = require("mongoose");
 const cors = require("cors");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
+const nodemailer = require("nodemailer");
+
+const User = require("./models/User");
+const Document = require("./models/Document");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// MySQL Connection (Local)
-const db = mysql.createConnection({
-  host: "localhost",
-  user: "root",          // your MySQL username
-  password: "imshaurya", // your MySQL password
-  database: "docexpiry1" // your database name
-});
+// MongoDB Connection Setup with Connection Pooling
+mongoose.connect(process.env.MONGO_URI, {
+  maxPoolSize: 100, // 50 se badhakar 100 connections karein
+  minPoolSize: 10,
+  serverSelectionTimeoutMS: 5000,
+})
+  .then(() => console.log(" Connected to MongoDB Successfully"))
+  .catch((err) => console.error(" MongoDB Connection Error:", err.message));
 
-db.connect(err => {
-  if (err) {
-    console.error("❌ MySQL connection error:", err);
-    return;
-  }
-  console.log("✅ Connected to MySQL (Local)");
+// Nodemailer Setup
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.GMAIL_EMAIL,
+    pass: process.env.GMAIL_PASSWORD,
+  },
 });
 
 // ======================== REGISTER API ========================
 app.post("/register", async (req, res) => {
-  const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({ message: "Email and password required" });
-  }
-
-  // Check if email already exists
-  const checkQuery = "SELECT * FROM users WHERE email = ?";
-  db.query(checkQuery, [email], async (err, results) => {
-    if (err) {
-      console.error("❌ Query error:", err);
-      return res.status(500).json({ message: "Database error" });
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password required" });
     }
 
-    if (results.length > 0) {
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
       return res.status(409).json({ message: "Email already registered" });
     }
 
-    try {
-      // Hash password before saving
-      const hashedPassword = await bcrypt.hash(password, 10);
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-      const insertQuery = "INSERT INTO users (email, password) VALUES (?, ?)";
-      db.query(insertQuery, [email, hashedPassword], (err) => {
-        if (err) {
-          console.error("❌ Insert error:", err);
-          return res.status(500).json({ message: "Database error" });
-        }
-        res.status(201).json({ message: "Registration successful" });
-      });
-    } catch (hashError) {
-      console.error("❌ Hashing error:", hashError);
-      res.status(500).json({ message: "Error processing password" });
-    }
-  });
+    // Save user
+    await User.create({
+      email,
+      password: hashedPassword,
+    });
+
+    return res.status(201).json({ message: "Registration successful" });
+  } catch (error) {
+    console.error("Register Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
 });
 
 // ======================== LOGIN API ========================
-app.post("/login", (req, res) => {
-  const { email, password } = req.body;
+app.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({ message: "Email and password required" });
-  }
-
-  const query = "SELECT * FROM users WHERE email = ?";
-  db.query(query, [email], async (err, results) => {
-    if (err) {
-      console.error("❌ Query error:", err);
-      return res.status(500).json({ message: "Database error" });
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password required" });
     }
 
-    if (results.length === 0) {
+    // Find user
+    const user = await User.findOne({ email });
+    if (!user) {
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
-    try {
-      const user = results[0];
-      const isMatch = await bcrypt.compare(password, user.password);
-
-      if (isMatch) {
-        res.json({ success: true, message: "Login successful" });
-      } else {
-        res.status(401).json({ success: false, message: "Invalid email or password" });
-      }
-    } catch (compareError) {
-      console.error("❌ Compare error:", compareError);
-      res.status(500).json({ message: "Error processing login" });
+    // Compare password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: "Invalid email or password" });
     }
-  });
+
+    return res.status(200).json({ success: true, message: "Login successful" });
+  } catch (error) {
+    console.error("Login Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+// DELETE route to remove a document by ID
+app.delete("/api/documents/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check karein agar MongoDB ObjectID match ho ya custom id string
+    let deletedDoc = null;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      deletedDoc = await Document.findByIdAndDelete(id);
+    } else {
+      // Agar frontend se custom string id (e.g. doc-173000000) aayi ho
+      deletedDoc = await Document.findOneAndDelete({ id: id });
+    }
+
+    if (!deletedDoc) {
+      return res.status(404).json({ error: "Document not found" });
+    }
+
+    console.log(`Document deleted successfully: ${id}`);
+    res.status(200).json({ message: "Document deleted successfully", id });
+  } catch (err) {
+    console.error("Delete Error:", err);
+    res.status(500).json({ error: "Internal server error during deletion" });
+  }
+});
+
+// ======================== ADD DOCUMENT & NOTIFY API ========================
+app.post("/api/documents", async (req, res) => {
+  try {
+    const { userEmail, name, docNumber, expiry } = req.body;
+
+    if (!userEmail || !name) {
+      return res.status(400).json({ error: "userEmail and name are required" });
+    }
+
+    // Save document to MongoDB
+    const newDoc = await Document.create({
+      userEmail,
+      name,
+      docNumber: docNumber || "N/A",
+      expiry: expiry || "N/A",
+    });
+
+    // Email Notification Handling
+    if (process.env.MOCK_EMAIL === "true") {
+      console.log(`[Mock Email] Document added alert for: ${userEmail}`);
+    } else if (process.env.GMAIL_EMAIL && process.env.GMAIL_PASSWORD) {
+      try {
+        await transporter.sendMail({
+          from: `"SmartDoc" <${process.env.GMAIL_EMAIL}>`,
+          to: userEmail,
+          subject: `${name} has been successfully Added`,
+          text: `Hello!${userEmail}.
+           You added document (${name}, Document No:- #${docNumber}) which will expires on ${expiry}.`,
+        });
+      } catch (mailErr) {
+        console.error(" Email Error:", mailErr.message);
+      }
+    }
+
+    return res.status(200).json({ success: true, id: newDoc._id });
+  } catch (error) {
+    console.error("Document API Error:", error);
+    return res.status(500).json({ error: error.message });
+  }
 });
 
 // ======================== START SERVER ========================
-const PORT = 5000;
+const PORT = process.env.PORT || 5173;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(` Server running on port ${PORT}`);
 });

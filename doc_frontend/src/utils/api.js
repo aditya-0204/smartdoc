@@ -3,7 +3,7 @@
 // ✅ Exported properly so Dashboard.jsx can import it
 export async function sendDataToBackend(documentData) {
   const apiUrl =
-    "https://vtugz65tj8.execute-api.us-east-1.amazonaws.com/prod/document";
+    "http://localhost:5000/api/documents";
 
   console.log("📡 Sending data to backend:", JSON.stringify(documentData));
 

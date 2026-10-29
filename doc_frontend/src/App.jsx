@@ -8,65 +8,62 @@ import { DocumentDemo } from "./components/DocumentDemo";
 import { Dashboard } from "./components/Dashboard";
 import { sampleDocs } from "./data/documents";
 
+const API_BASE_URL = "http://localhost:5000";
 
 export default function App() {
   // Initialize user state from localStorage for session persistence
   const [user, setUser] = useState(() => {
-    const savedUser = localStorage.getItem('user');
+    const savedUser = localStorage.getItem("user");
     return savedUser ? JSON.parse(savedUser) : null;
   });
 
   // Store all documents in localStorage, filter by user
   const [docs, setDocs] = useState(() => {
-    const allDocs = JSON.parse(localStorage.getItem('smartdoc_docs') || '[]');
+    const allDocs = JSON.parse(localStorage.getItem("smartdoc_docs") || "[]");
     if (!user) return [];
-    return allDocs.filter(doc => doc.userEmail === user.email);
+    return allDocs.filter((doc) => doc.userEmail === user.email);
   });
   const [isModalOpen, setModalOpen] = useState(false);
 
   // Initialize theme from localStorage or OS preference
   const [theme, setTheme] = useState(() => {
-    const savedTheme = localStorage.getItem('theme');
+    const savedTheme = localStorage.getItem("theme");
     if (savedTheme) return savedTheme;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   });
 
   // Effect for theme persistence
   useEffect(() => {
     const root = window.document.documentElement;
-    root.classList.remove(theme === 'light' ? 'dark' : 'light');
+    root.classList.remove(theme === "light" ? "dark" : "light");
     root.classList.add(theme);
-    localStorage.setItem('theme', theme);
+    localStorage.setItem("theme", theme);
   }, [theme]);
 
   // Effect for user session persistence
   useEffect(() => {
     if (user) {
-      localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem("user", JSON.stringify(user));
     } else {
-      localStorage.removeItem('user');
+      localStorage.removeItem("user");
     }
   }, [user]);
 
-
-  // --- MODIFIED: The Main Authentication Handler ---
+  // --- Main Authentication Handler ---
   const handleAuth = (isLogin, formData) => {
-    // Get our "user database" from localStorage, or start with an empty array
-    const users = JSON.parse(localStorage.getItem('smartdoc_users')) || [];
+    const users = JSON.parse(localStorage.getItem("smartdoc_users")) || [];
 
-    // Google login/signup flow
     if (formData.google) {
-      let foundUser = users.find(u => u.email === formData.email);
+      let foundUser = users.find((u) => u.email === formData.email);
       if (!foundUser) {
-        // Auto-register Google user
         foundUser = {
           name: formData.name || "Google User",
           email: formData.email,
-          password: '',
-          google: true
+          password: "",
+          google: true,
         };
         const updatedUsers = [...users, foundUser];
-        localStorage.setItem('smartdoc_users', JSON.stringify(updatedUsers));
+        localStorage.setItem("smartdoc_users", JSON.stringify(updatedUsers));
       }
       setUser({ name: formData.name, email: formData.email });
       setModalOpen(false);
@@ -74,76 +71,76 @@ export default function App() {
     }
 
     if (isLogin) {
-      // --- LOGIN LOGIC ---
-      // 1. Find the user by email
-      const foundUser = users.find(u => u.email === formData.email);
-
-      // 2. Check if user exists and password matches
+      const foundUser = users.find((u) => u.email === formData.email);
       if (foundUser && foundUser.password === formData.password) {
-        // Success! Log them in.
         setUser({ name: foundUser.name, email: foundUser.email });
         setModalOpen(false);
       } else {
-        // Failed login
         alert("Invalid email or password.");
       }
     } else {
-      // --- SIGN UP LOGIC ---
-      // 1. Check if the email is already registered
-      const userExists = users.some(u => u.email === formData.email);
-
+      const userExists = users.some((u) => u.email === formData.email);
       if (userExists) {
         alert("An account with this email already exists.");
       } else {
-        // 2. Create the new user object (omitting password from what we set in state)
         const newUser = {
           name: formData.name || "New User",
           email: formData.email,
-          password: formData.password, // This is stored but not set in active state
+          password: formData.password,
         };
-
-        // 3. Add the new user to our list and save it
         const updatedUsers = [...users, newUser];
-        localStorage.setItem('smartdoc_users', JSON.stringify(updatedUsers));
-
-        // 4. Automatically log the new user in
+        localStorage.setItem("smartdoc_users", JSON.stringify(updatedUsers));
         setUser({ name: newUser.name, email: newUser.email });
         setModalOpen(false);
       }
     }
   };
 
-
   const handleLogout = () => {
     setUser(null);
   };
 
-
   const handleAddDocument = (newDoc) => {
-    // Attach user email to the document
     const docWithUser = { ...newDoc, userEmail: user.email };
-    // Save to all docs in localStorage
-    const allDocs = JSON.parse(localStorage.getItem('smartdoc_docs') || '[]');
+    const allDocs = JSON.parse(localStorage.getItem("smartdoc_docs") || "[]");
     const updatedDocs = [docWithUser, ...allDocs];
-    localStorage.setItem('smartdoc_docs', JSON.stringify(updatedDocs));
-    // Update state for current user only
-    setDocs(updatedDocs.filter(doc => doc.userEmail === user.email));
+    localStorage.setItem("smartdoc_docs", JSON.stringify(updatedDocs));
+    setDocs(updatedDocs.filter((doc) => doc.userEmail === user.email));
   };
 
+  // --- UPDATED: Delete document with Backend API call ---
+  const handleDeleteDocument = async (docId) => {
+    try {
+      // 1. Send DELETE request to Express backend
+      const response = await fetch(`${API_BASE_URL}/api/documents/${docId}`, {
+        method: "DELETE",
+      });
 
-  const handleDeleteDocument = (docId) => {
-    const allDocs = JSON.parse(localStorage.getItem('smartdoc_docs') || '[]');
-    const updatedDocs = allDocs.filter(doc => doc.id !== docId);
-    localStorage.setItem('smartdoc_docs', JSON.stringify(updatedDocs));
-    setDocs(updatedDocs.filter(doc => doc.userEmail === user.email));
+      if (!response.ok) {
+        throw new Error(`Failed to delete document on server. Status: ${response.status}`);
+      }
+
+      // 2. Synchronize localStorage
+      const allDocs = JSON.parse(localStorage.getItem("smartdoc_docs") || "[]");
+      const updatedDocs = allDocs.filter(
+        (doc) => (doc.id || doc._id) !== docId
+      );
+      localStorage.setItem("smartdoc_docs", JSON.stringify(updatedDocs));
+
+      // 3. Update React UI state
+      setDocs(updatedDocs.filter((doc) => doc.userEmail === user.email));
+      console.log(`Successfully deleted document: ${docId}`);
+    } catch (error) {
+      console.error("Delete error:", error);
+      alert("Failed to delete document from the server. Please check if the backend is running.");
+    }
   };
-
 
   // When user changes (login/logout), update docs for that user
   useEffect(() => {
     if (user) {
-      const allDocs = JSON.parse(localStorage.getItem('smartdoc_docs') || '[]');
-      setDocs(allDocs.filter(doc => doc.userEmail === user.email));
+      const allDocs = JSON.parse(localStorage.getItem("smartdoc_docs") || "[]");
+      setDocs(allDocs.filter((doc) => doc.userEmail === user.email));
     } else {
       setDocs([]);
     }
@@ -156,7 +153,7 @@ export default function App() {
         onLoginClick={() => setModalOpen(true)}
         onLogout={handleLogout}
         theme={theme}
-        toggleTheme={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+        toggleTheme={() => setTheme(theme === "light" ? "dark" : "light")}
       />
 
       <main>
@@ -168,7 +165,6 @@ export default function App() {
             onAddDocument={handleAddDocument}
           />
         ) : (
-          // ... Landing page content
           <>
             <section className="container mx-auto px-6 py-16 grid md:grid-cols-2 gap-12 items-center">
               <div>
