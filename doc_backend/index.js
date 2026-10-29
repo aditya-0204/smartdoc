@@ -23,26 +23,29 @@ mongoose
   .catch((err) => console.error("MongoDB Connection Error:", err.message));
 
 // Nodemailer Setup - Render-safe direct connection (No pooling)
+// Nodemailer Setup - Direct SSL Host connection (Render safe)
 const transporter = nodemailer.createTransport({
-  service: "gmail",
   host: "smtp.gmail.com",
   port: 465,
-  secure: true,
+  secure: true, // Port 465 ke sath compulsory true
   auth: {
     user: process.env.GMAIL_EMAIL,
-    pass: process.env.GMAIL_PASSWORD, // 16-character Google App Password (No spaces)
+    pass: process.env.GMAIL_PASSWORD, // 16-character App Password (no spaces)
   },
   tls: {
     rejectUnauthorized: false,
   },
+  connectionTimeout: 15000,
+  greetingTimeout: 15000,
+  socketTimeout: 20000,
 });
 
 // Startup verification check
 transporter.verify((error, success) => {
   if (error) {
-    console.error("❌ Nodemailer verification failed:", error.message);
+    console.error("Nodemailer verification failed:", error.message);
   } else {
-    console.log("✅ Nodemailer ready to send emails via Gmail");
+    console.log("Nodemailer ready to send emails via Gmail");
   }
 });
 
