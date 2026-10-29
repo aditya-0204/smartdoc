@@ -22,35 +22,31 @@ mongoose
   .then(() => console.log("Connected to MongoDB Successfully"))
   .catch((err) => console.error("MongoDB Connection Error:", err.message));
 
-// Nodemailer Setup (Port 465 SSL for Render stability)
-// index.js transporter configuration:
+// Nodemailer Setup - Render-safe direct connection (No pooling)
 const transporter = nodemailer.createTransport({
+  service: "gmail",
   host: "smtp.gmail.com",
   port: 465,
-  secure: true, // true for port 465
+  secure: true,
   auth: {
     user: process.env.GMAIL_EMAIL,
-    pass: process.env.GMAIL_PASSWORD, // 16-digit Google App Password
+    pass: process.env.GMAIL_PASSWORD, // 16-character Google App Password (No spaces)
   },
   tls: {
-    rejectUnauthorized: false, // TLS handshake issues bypass
+    rejectUnauthorized: false,
   },
-  pool: true,
-  maxConnections: 1,
-  rateLimit: 1, 
-  connectionTimeout: 20000, // 20s
-  greetingTimeout: 20000,
-  socketTimeout: 30000,
 });
+
+// Startup verification check
 transporter.verify((error, success) => {
   if (error) {
-    console.error("Nodemailer verification failed:", error.message);
+    console.error("❌ Nodemailer verification failed:", error.message);
   } else {
-    console.log("Nodemailer ready to send emails via Gmail");
+    console.log("✅ Nodemailer ready to send emails via Gmail");
   }
 });
 
-// Test / Health Route (Verification ke liye)
+// Test / Health Route
 app.get("/api/test", (req, res) => {
   res.status(200).json({ status: "ok", message: "SmartDoc backend is active" });
 });
@@ -97,17 +93,30 @@ app.post("/api/documents", async (req, res) => {
 
     console.log("Document saved:", newDoc._id);
 
-    // 2. Email trigger (Non-blocking)
+    // 2. Email trigger (Safe async background send)
     if (process.env.GMAIL_EMAIL && process.env.GMAIL_PASSWORD) {
       transporter
         .sendMail({
-          from: `"SmartDoc" <${process.env.GMAIL_EMAIL}>`,
+          from: `"SmartDoc Official" <${process.env.GMAIL_EMAIL}>`,
           to: userEmail,
           subject: `${documentName} has been successfully added`,
-          text: `Hello ${userEmail},\n\nYou added document: "${documentName}" (Doc No: ${documentNo}) which expires on: ${documentExpiry}.\n\n- SmartDoc Team`,
+          html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+              <h2>SmartDoc Document Notification</h2>
+              <p>Hello,</p>
+              <p>Your document has been recorded successfully:</p>
+              <ul>
+                <li><strong>Document Name:</strong> ${documentName}</li>
+                <li><strong>Document Number:</strong> ${documentNo}</li>
+                <li><strong>Expiry Date:</strong> ${documentExpiry}</li>
+              </ul>
+              <br/>
+              <p>Best regards,<br/>SmartDoc Team</p>
+            </div>
+          `,
         })
-        .then(() => console.log(`Email sent to ${userEmail}`))
-        .catch((mailErr) => console.error("Email Error:", mailErr.message));
+        .then((info) => console.log(`✅ Email sent to ${userEmail} (ID: ${info.messageId})`))
+        .catch((mailErr) => console.error("❌ Email Send Error:", mailErr.message));
     }
 
     return res.status(201).json(newDoc);
@@ -175,4 +184,4 @@ app.post("/login", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5173;
-app.listen(PORT, () => console.log(` Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
