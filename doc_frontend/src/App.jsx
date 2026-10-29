@@ -11,7 +11,7 @@ import { sampleDocs } from "./data/documents";
 const API_BASE_URL = "https://smartdoc-nj3x.onrender.com";
 
 export default function App() {
-  // 1. User state
+  // 1. User session (Sirf login persistence ke liye)
   const [user, setUser] = useState(() => {
     try {
       const savedUser = localStorage.getItem("user");
@@ -21,18 +21,8 @@ export default function App() {
     }
   });
 
-  // 2. Documents state
-  const [docs, setDocs] = useState(() => {
-    try {
-      const allDocs = JSON.parse(localStorage.getItem("smartdoc_docs") || "[]");
-      const savedUser = JSON.parse(localStorage.getItem("user") || "null");
-      if (!savedUser) return [];
-      return allDocs.filter((doc) => doc.userEmail === savedUser.email);
-    } catch {
-      return [];
-    }
-  });
-
+  // 2. Documents State (Pura fresh state, no localStorage fallback)
+  const [docs, setDocs] = useState([]);
   const [isModalOpen, setModalOpen] = useState(false);
   const isSubmittingRef = useRef(false);
 
@@ -50,18 +40,21 @@ export default function App() {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  // 4. Fetch docs directly from MongoDB on login / reload with Deduplication
+  // 4. MongoDB Atlas se documents fetch karna on load/login
   useEffect(() => {
     const fetchDocuments = async () => {
-      if (!user || !user.email) return;
+      if (!user || !user.email) {
+        setDocs([]);
+        return;
+      }
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/documents?email=${encodeURIComponent(user.email)}`);
         if (res.ok) {
           const rawData = await res.json();
           const items = Array.isArray(rawData) ? rawData : (rawData.data || []);
-          
-          // ID normalization & strict deduplication by ID
+
+          // Duplicate filtration by ID & content
           const seenIds = new Set();
           const uniqueDocs = [];
 
@@ -74,13 +67,12 @@ export default function App() {
                 id: docId,
                 _id: docId,
                 name: doc.name || doc.title || "Document",
-                expiry: doc.expiry || doc.expiryDate || "N/A"
+                expiry: doc.expiry || doc.expiryDate || "N/A",
               });
             }
           });
 
           setDocs(uniqueDocs);
-          localStorage.setItem("smartdoc_docs", JSON.stringify(uniqueDocs));
         }
       } catch (err) {
         console.error("Error fetching docs from MongoDB:", err);
@@ -148,11 +140,10 @@ export default function App() {
     setDocs([]);
   };
 
-  // Add Document (POST to Atlas) - Double click block via ref
+  // Add Document (Direct to MongoDB Atlas)
   const handleAddDocument = async (newDocData) => {
     if (!user?.email) return;
-    
-    // Synchronous immediate lock
+
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
 
@@ -189,25 +180,21 @@ export default function App() {
       };
 
       setDocs((prevDocs) => {
-        // Prevent adding if already present in state
         const exists = prevDocs.some((d) => String(d._id || d.id) === docId);
         if (exists) return prevDocs;
-        const updated = [savedDoc, ...prevDocs];
-        localStorage.setItem("smartdoc_docs", JSON.stringify(updated));
-        return updated;
+        return [savedDoc, ...prevDocs];
       });
     } catch (error) {
       console.error("Add Document Error:", error);
       alert("Server par document save nahi ho paya.");
     } finally {
-      // Small cooldown delay before releasing lock
       setTimeout(() => {
         isSubmittingRef.current = false;
       }, 800);
     }
   };
 
-  // Delete Document (DELETE on Atlas)
+  // Delete Document (Direct from MongoDB Atlas)
   const handleDeleteDocument = async (id) => {
     try {
       const targetId = String(id);
@@ -218,10 +205,6 @@ export default function App() {
       if (!response.ok && response.status !== 404) {
         throw new Error(`Failed to delete document on server. Status: ${response.status}`);
       }
-
-      const allDocs = JSON.parse(localStorage.getItem("smartdoc_docs") || "[]");
-      const updatedDocs = allDocs.filter((doc) => String(doc.id || doc._id) !== targetId);
-      localStorage.setItem("smartdoc_docs", JSON.stringify(updatedDocs));
 
       setDocs((prev) => prev.filter((doc) => String(doc.id || doc._id) !== targetId));
     } catch (error) {
