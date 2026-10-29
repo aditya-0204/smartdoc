@@ -19,10 +19,9 @@ mongoose
     minPoolSize: 10,
     serverSelectionTimeoutMS: 5000,
   })
-  .then(() => console.log("Connected to MongoDB Successfully"))
-  .catch((err) => console.error("MongoDB Connection Error:", err.message));
+  .then(() => console.log("✅ Connected to MongoDB Successfully"))
+  .catch((err) => console.error("❌ MongoDB Connection Error:", err.message));
 
-// Nodemailer Setup - Render-safe direct connection (No pooling)
 // Nodemailer Setup - Direct SSL Host connection (Render safe)
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
@@ -43,9 +42,9 @@ const transporter = nodemailer.createTransport({
 // Startup verification check
 transporter.verify((error, success) => {
   if (error) {
-    console.error("Nodemailer verification failed:", error.message);
+    console.error("❌ Nodemailer verification failed:", error.message);
   } else {
-    console.log("Nodemailer ready to send emails via Gmail");
+    console.log("✅ Nodemailer ready to send emails via Gmail");
   }
 });
 
@@ -96,8 +95,9 @@ app.post("/api/documents", async (req, res) => {
 
     console.log("Document saved:", newDoc._id);
 
-    // 2. Email trigger (Safe async background send)
+    // 2. Email trigger (Safe async background send with advanced logging)
     if (process.env.GMAIL_EMAIL && process.env.GMAIL_PASSWORD) {
+      console.log(`Attempting to send email to: ${userEmail}`); // Log attempt
       transporter
         .sendMail({
           from: `"SmartDoc Official" <${process.env.GMAIL_EMAIL}>`,
@@ -118,8 +118,13 @@ app.post("/api/documents", async (req, res) => {
             </div>
           `,
         })
-        .then((info) => console.log(`✅ Email sent to ${userEmail} (ID: ${info.messageId})`))
-        .catch((mailErr) => console.error("❌ Email Send Error:", mailErr.message));
+        .then((info) => console.log(`✅ Email sent successfully to ${userEmail} (Message ID: ${info.messageId})`))
+        .catch((mailErr) => {
+             console.error("❌ Email Send Error. Full details:", mailErr);
+             console.error("❌ Error Message:", mailErr.message);
+        });
+    } else {
+         console.warn("⚠️ Email credentials (GMAIL_EMAIL or GMAIL_PASSWORD) are missing in Render Environment Variables.");
     }
 
     return res.status(201).json(newDoc);
@@ -187,4 +192,4 @@ app.post("/login", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5173;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
