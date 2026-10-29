@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "kafkajs": "^2.2.4",
     "mongoose": "^9.11.4",
     "resend": "^6.35.0"
   }

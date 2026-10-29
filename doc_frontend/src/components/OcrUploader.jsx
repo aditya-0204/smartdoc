@@ -88,7 +88,7 @@ const DOC_TYPES = [
   },
   {
     key: 'voter', name: 'Voter ID (EPIC)', group: 'Identity', hasExpiry: false,
-    match: [/voter/i, /election\s*commission/i, /\bepic\b/i, /निर्वाचन/],
+    match: [/voter/i, /election\s*commission/i, /\bepic\b/i, /निर्वाचन/, /electoral\s*(?:identity|photo)/i],
     findId: rx(/\b([A-Z]{3}\d{7})\b/),
   },
   {
@@ -556,9 +556,25 @@ const extractDocumentId = (text, type) => {
   for (const m of text.matchAll(LABELLED_ID)) {
     if (/\d/.test(m[1])) return m[1];
   }
-  // 3) generic shapes (phone numbers removed first)
+  // 2b) label and value separated (table layout):
+  //     "CARD NO.  DATE OF BIRTH  EXPIRY DATE \n BELO-56656  24/07/1995  20/07/2030"
   const clean = stripPhones(text);
+  const LABEL_ONLY =
+    /\b(?:card|licen[cs]e|passport|policy|registration|reg|epic|document|enrol(?:l)?ment|roll|member|employee|serial|certificate|reference|ref|id)\.?\s*(?:no|number|id|#)\b\.?/gi;
+  for (const lm of clean.matchAll(LABEL_ONLY)) {
+    const from = lm.index + lm[0].length;
+    const after = clean
+      .slice(from, from + 160)
+      .replace(/\b\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\b/g, ' ') // dates
+      .replace(new RegExp(`\\b${MONTH_RE}[a-z]*[\\s\\-]+\\d{4}\\b`, 'gi'), ' '); // JUL-2027
+    const tok = after.match(/(?<![A-Za-z0-9])(?=[A-Z0-9\-\/]*\d)[A-Z0-9][A-Z0-9\-\/]{4,24}(?![A-Za-z0-9])/);
+    if (tok) return tok[0];
+  }
+
+  // 3) generic shapes (phone numbers already removed)
   let m = clean.match(/\b[A-Z]{1,3}\d{6,12}\b/);
+  if (m) return m[0];
+  m = clean.match(/\b[A-Z]{2,6}-\d{5,10}\b/); // BELO-56656
   if (m) return m[0];
   m = clean.match(/\b\d{2}[A-Z]{2,4}\d{3,5}\b/); // roll/registration style: 23BPS1185
   if (m) return m[0];
