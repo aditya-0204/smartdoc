@@ -11,7 +11,7 @@ import { sampleDocs } from "./data/documents";
 const API_BASE_URL = "https://smartdoc-nj3x.onrender.com";
 
 export default function App() {
-  // 1. User session (Sirf login persistence ke liye)
+  // 1. User session (Sirf login persistence ke liye, local storage me rahega)
   const [user, setUser] = useState(() => {
     try {
       const savedUser = localStorage.getItem("user");
@@ -21,9 +21,11 @@ export default function App() {
     }
   });
 
-  // 2. Documents State (Pura fresh state, no localStorage fallback)
+  // 2. Documents State (Pura fresh state, strictly MongoDB Atlas se chalega)
   const [docs, setDocs] = useState([]);
   const [isModalOpen, setModalOpen] = useState(false);
+  
+  // Double submit rokne ke liye reference lock
   const isSubmittingRef = useRef(false);
 
   // 3. Theme persistence
@@ -40,7 +42,7 @@ export default function App() {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  // 4. MongoDB Atlas se documents fetch karna on load/login
+  // 4. MongoDB Atlas se documents fetch karna on load/login (With Smart Deduplication)
   useEffect(() => {
     const fetchDocuments = async () => {
       if (!user || !user.email) {
@@ -54,20 +56,30 @@ export default function App() {
           const rawData = await res.json();
           const items = Array.isArray(rawData) ? rawData : (rawData.data || []);
 
-          // Duplicate filtration by ID & content
+          // Duplicate filtration by ID & Content Signature
           const seenIds = new Set();
+          const seenSignatures = new Set();
           const uniqueDocs = [];
 
           items.forEach((doc) => {
             const docId = String(doc._id || doc.id);
-            if (!seenIds.has(docId)) {
+            const docName = doc.name || doc.title || "Document";
+            const docExpiry = doc.expiry || doc.expiryDate || "N/A";
+            
+            // Ek unique signature create karein taaki purane double-clicks filter ho jayein
+            const signature = `${docName}-${doc.docNumber || 'N/A'}-${docExpiry}`;
+
+            // Agar ID nayi hai aur waisa same document pehle load nahi hua hai
+            if (!seenIds.has(docId) && !seenSignatures.has(signature)) {
               seenIds.add(docId);
+              seenSignatures.add(signature);
+              
               uniqueDocs.push({
                 ...doc,
                 id: docId,
                 _id: docId,
-                name: doc.name || doc.title || "Document",
-                expiry: doc.expiry || doc.expiryDate || "N/A",
+                name: docName,
+                expiry: docExpiry,
               });
             }
           });
@@ -140,10 +152,11 @@ export default function App() {
     setDocs([]);
   };
 
-  // Add Document (Direct to MongoDB Atlas)
+  // Add Document (Direct to MongoDB Atlas, strict double-click prevention)
   const handleAddDocument = async (newDocData) => {
     if (!user?.email) return;
 
+    // Instant sync lock against rapid double clicks
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
 
@@ -180,6 +193,7 @@ export default function App() {
       };
 
       setDocs((prevDocs) => {
+        // Safe check to avoid adding a duplicate into local state
         const exists = prevDocs.some((d) => String(d._id || d.id) === docId);
         if (exists) return prevDocs;
         return [savedDoc, ...prevDocs];
@@ -188,9 +202,10 @@ export default function App() {
       console.error("Add Document Error:", error);
       alert("Server par document save nahi ho paya.");
     } finally {
+      // 1-second timeout release to completely block rapid spamming
       setTimeout(() => {
         isSubmittingRef.current = false;
-      }, 800);
+      }, 1000);
     }
   };
 
