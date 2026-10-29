@@ -3,7 +3,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 
 const User = require("./models/User");
 const Document = require("./models/Document");
@@ -11,6 +11,9 @@ const Document = require("./models/Document");
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Resend Initialization
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // MongoDB Connection
 mongoose
@@ -21,32 +24,6 @@ mongoose
   })
   .then(() => console.log("✅ Connected to MongoDB Successfully"))
   .catch((err) => console.error("❌ MongoDB Connection Error:", err.message));
-
-// Nodemailer Setup - Direct SSL Host connection (Render safe)
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true, // Port 465 ke sath compulsory true
-  auth: {
-    user: process.env.GMAIL_EMAIL,
-    pass: process.env.GMAIL_PASSWORD, // 16-character App Password (no spaces)
-  },
-  tls: {
-    rejectUnauthorized: false,
-  },
-  connectionTimeout: 15000,
-  greetingTimeout: 15000,
-  socketTimeout: 20000,
-});
-
-// Startup verification check
-transporter.verify((error, success) => {
-  if (error) {
-    console.error("❌ Nodemailer verification failed:", error.message);
-  } else {
-    console.log("✅ Nodemailer ready to send emails via Gmail");
-  }
-});
 
 // Test / Health Route
 app.get("/api/test", (req, res) => {
@@ -73,6 +50,7 @@ app.get("/api/documents", async (req, res) => {
 });
 
 // ======================== ADD DOCUMENT & NOTIFY ========================
+// ======================== ADD DOCUMENT & NOTIFY ========================
 app.post("/api/documents", async (req, res) => {
   try {
     const { userEmail, name, title, docNumber, expiry, expiryDate } = req.body;
@@ -85,6 +63,19 @@ app.post("/api/documents", async (req, res) => {
     const documentExpiry = expiry || expiryDate || "N/A";
     const documentNo = docNumber || "N/A";
 
+    // 🔒 BACKEND DUPLICATE LOCK (Prevents double saving)
+    const fiveSecondsAgo = new Date(Date.now() - 5000);
+    const recentDuplicate = await Document.findOne({
+      userEmail,
+      name: documentName,
+      createdAt: { $gte: fiveSecondsAgo }
+    });
+
+    if (recentDuplicate) {
+      console.log("⚠️ Prevented duplicate document creation.");
+      return res.status(200).json(recentDuplicate); 
+    }
+
     // 1. Save to MongoDB Atlas
     const newDoc = await Document.create({
       userEmail,
@@ -95,36 +86,46 @@ app.post("/api/documents", async (req, res) => {
 
     console.log("Document saved:", newDoc._id);
 
-    // 2. Email trigger (Safe async background send with advanced logging)
-    if (process.env.GMAIL_EMAIL && process.env.GMAIL_PASSWORD) {
-      console.log(`Attempting to send email to: ${userEmail}`); // Log attempt
-      transporter
-        .sendMail({
-          from: `"SmartDoc Official" <${process.env.GMAIL_EMAIL}>`,
-          to: userEmail,
+    // 2. Email trigger via Brevo API (No timeout issues on Render)
+    if (process.env.BREVO_API_KEY) {
+      fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          "api-key": process.env.BREVO_API_KEY
+        },
+        body: JSON.stringify({
+          sender: { email: "smartdocoffical@gmail.com", name: "SmartDoc Official" },
+          to: [{ email: userEmail }],
           subject: `${documentName} has been successfully added`,
-          html: `
-            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-              <h2>SmartDoc Document Notification</h2>
+          htmlContent: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; padding: 20px;">
+              <h2 style="color: #2563eb;">SmartDoc Notification</h2>
               <p>Hello,</p>
               <p>Your document has been recorded successfully:</p>
-              <ul>
+              <ul style="background: #f3f4f6; padding: 15px; border-radius: 5px; list-style-type: none;">
                 <li><strong>Document Name:</strong> ${documentName}</li>
                 <li><strong>Document Number:</strong> ${documentNo}</li>
                 <li><strong>Expiry Date:</strong> ${documentExpiry}</li>
               </ul>
               <br/>
-              <p>Best regards,<br/>SmartDoc Team</p>
+              <p>Best regards,<br/><strong>SmartDoc Team</strong></p>
             </div>
-          `,
+          `
         })
-        .then((info) => console.log(`✅ Email sent successfully to ${userEmail} (Message ID: ${info.messageId})`))
-        .catch((mailErr) => {
-             console.error("❌ Email Send Error. Full details:", mailErr);
-             console.error("❌ Error Message:", mailErr.message);
-        });
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.messageId) {
+          console.log(`✅ Email sent successfully via Brevo to ${userEmail} (ID: ${data.messageId})`);
+        } else {
+          console.error("❌ Brevo API Error:", data);
+        }
+      })
+      .catch(err => console.error("❌ Brevo Fetch Error:", err));
     } else {
-         console.warn("⚠️ Email credentials (GMAIL_EMAIL or GMAIL_PASSWORD) are missing in Render Environment Variables.");
+      console.warn("⚠️ BREVO_API_KEY is missing in Environment Variables.");
     }
 
     return res.status(201).json(newDoc);
