@@ -24,16 +24,18 @@ mongoose
 
 // Nodemailer Setup (Port 465 SSL for Render stability)
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
+  service: "gmail",
   auth: {
     user: process.env.GMAIL_EMAIL,
-    pass: process.env.GMAIL_PASSWORD,
+    pass: process.env.GMAIL_PASSWORD, // 16-character App Password
   },
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 15000,
+});
+transporter.verify((error, success) => {
+  if (error) {
+    console.error("Nodemailer verification failed:", error.message);
+  } else {
+    console.log("Nodemailer ready to send emails via Gmail");
+  }
 });
 
 // Test / Health Route (Verification ke liye)
