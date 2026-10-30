@@ -4,7 +4,16 @@ const amqp = require("amqplib");
 const Document = require("./models/Document"); 
 
 const QUEUE_NAME = 'smartdoc_tasks';
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
 
+app.get('/', (req, res) => {
+  res.send('Worker is running and healthy!');
+});
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Worker health check server running on port ${PORT}`);
+});
 mongoose
   .connect(process.env.MONGO_URI, {
     maxPoolSize: 100,
