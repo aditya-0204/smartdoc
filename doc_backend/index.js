@@ -6,10 +6,14 @@ const bcrypt = require("bcryptjs");
 
 const User = require("./models/User");
 const Document = require("./models/Document");
+const { connectQueue, sendToQueue } = require("./rabbitmq.js");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Server start hote hi RabbitMQ connect karein
+connectQueue();
 
 // MongoDB Connection
 mongoose
@@ -18,8 +22,8 @@ mongoose
     minPoolSize: 10,
     serverSelectionTimeoutMS: 5000,
   })
-  .then(() => console.log("✅ Connected to MongoDB Successfully"))
-  .catch((err) => console.error("❌ MongoDB Connection Error:", err.message));
+  .then(() => console.log("Connected to MongoDB Successfully"))
+  .catch((err) => console.error("MongoDB Connection Error:", err.message));
 
 // Test / Health Route
 app.get("/api/test", (req, res) => {
@@ -45,12 +49,10 @@ app.get("/api/documents", async (req, res) => {
   }
 });
 
-// ======================== ADD DOCUMENT & NOTIFY ========================
+// ADD DOCUMENT & NOTIFY 
 app.post("/api/documents", async (req, res) => {
   try {
     const { userEmail, name, title, docNumber, expiry, expiryDate } = req.body;
-
-    // 🚦 DETECT LOAD TEST MODE
     const isTestMode = req.headers['x-test-mode'] === 'true';
 
     if (!userEmail) {
@@ -61,83 +63,30 @@ app.post("/api/documents", async (req, res) => {
     const documentExpiry = expiry || expiryDate || "N/A";
     const documentNo = docNumber || "N/A";
 
-    // 🔒 BACKEND DUPLICATE LOCK (Prevents double saving)
-    const fiveSecondsAgo = new Date(Date.now() - 5000);
-    const recentDuplicate = await Document.findOne({
-      userEmail,
-      name: documentName,
-      createdAt: { $gte: fiveSecondsAgo }
-    });
-
-    if (recentDuplicate) {
-      // Do not log "Prevented duplicate" loudly during load tests to avoid spamming server logs
-      if (!isTestMode) console.log("⚠️ Prevented duplicate document creation.");
-      return res.status(200).json(recentDuplicate); 
-    }
-
-    // 1. Save to MongoDB Atlas (This will execute for both real users and k6 tests)
-    const newDoc = await Document.create({
-      userEmail,
-      name: documentName,
-      docNumber: documentNo,
-      expiry: documentExpiry,
-    });
-
-    if (!isTestMode) console.log("Document saved:", newDoc._id);
-
-    // 2. Email trigger via Brevo API (Skips if x-test-mode is true)
-    if (process.env.BREVO_API_KEY && !isTestMode) {
-      fetch("https://api.brevo.com/v3/smtp/email", {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          "Content-Type": "application/json",
-          "api-key": process.env.BREVO_API_KEY
+    await sendToQueue({
+        type: 'SAVE_DOCUMENT',
+        payload: {
+            userEmail,
+            documentName,
+            documentNo,
+            documentExpiry,
+            isTestMode
         },
-        body: JSON.stringify({
-          sender: { email: "smartdocoffical@gmail.com", name: "SmartDoc Official" },
-          to: [{ email: userEmail }],
-          subject: `${documentName} has been successfully added`,
-          htmlContent: `
-            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; padding: 20px;">
-              <h2 style="color: #2563eb;">SmartDoc Notification</h2>
-              <p>Hello,</p>
-              <p>Your document has been recorded successfully:</p>
-              <ul style="background: #f3f4f6; padding: 15px; border-radius: 5px; list-style-type: none;">
-                <li><strong>Document Name:</strong> ${documentName}</li>
-                <li><strong>Document Number:</strong> ${documentNo}</li>
-                <li><strong>Expiry Date:</strong> ${documentExpiry}</li>
-              </ul>
-              <br/>
-              <p>Best regards,<br/><strong>SmartDoc Team</strong></p>
-            </div>
-          `
-        })
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.messageId) {
-          console.log(`✅ Email sent successfully via Brevo to ${userEmail} (ID: ${data.messageId})`);
-        } else {
-          console.error("❌ Brevo API Error:", data);
-        }
-      })
-      .catch(err => console.error("❌ Brevo Fetch Error:", err));
-    } else if (isTestMode) {
-      // Confirms the load test hit the endpoint without sending an email
-      console.log(`⚠️ Load Test Document Saved (${newDoc._id}): Brevo email skipped.`);
-    } else {
-      console.warn("⚠️ BREVO_API_KEY is missing in Environment Variables.");
-    }
+        timestamp: Date.now()
+    });
 
-    return res.status(201).json(newDoc);
+    return res.status(202).json({
+        success: true,
+        message: "Document received and is processing in the background."
+    });
+
   } catch (err) {
     console.error("Save Doc Error:", err);
-    return res.status(500).json({ error: "Failed to save document" });
+    return res.status(500).json({ error: "Failed to process document request" });
   }
 });
 
-// ======================== DELETE DOCUMENT ========================
+// DELETE DOCUMENT
 app.delete("/api/documents/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -162,7 +111,6 @@ app.delete("/api/documents/:id", async (req, res) => {
   }
 });
 
-// ======================== AUTH ROUTES ========================
 app.post("/register", async (req, res) => {
   try {
     const { email, password } = req.body;

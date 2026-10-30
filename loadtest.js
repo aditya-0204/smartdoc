@@ -4,16 +4,16 @@ import { check, sleep } from 'k6';
 // Test Configuration: How many virtual users (VUs) and for how long
 export const options = {
   stages: [
-    { duration: '10s', target: 50 },  // Shuruati 10 sec mein 50 users tak le jao
-    { duration: '20s', target: 50 },  // 20 sec tak 50 users hold karo
-    { duration: '15s', target: 200 }, // Achanak load badha kar 200 users kar do (Yahan shayad free tier haanfne lagega)
-    { duration: '20s', target: 200 }, // 200 users par hold karo (Asli test)
-    { duration: '10s', target: 400 }, // Ek aakhiri bada jhatka 400 users ka
-    { duration: '10s', target: 0 },   // Wapas 0 par le aao
+    { duration: '10s', target: 50 },  
+    { duration: '20s', target: 50 },  
+    { duration: '15s', target: 200 }, 
+    { duration: '20s', target: 200 }, 
+    { duration: '10s', target: 400 }, 
+    { duration: '10s', target: 0 },   
   ],
 };
 
-const BASE_URL = 'https://smartdoc-nj3x.onrender.com';
+const BASE_URL = 'http://localhost:5000/api/documents';
 const TEST_EMAIL = 'smartdocoffical@gmail.com'; 
 
 export default function () {
@@ -34,7 +34,7 @@ export default function () {
   // ==========================================
   const payload = JSON.stringify({
     userEmail: TEST_EMAIL,
-    name: `Load Test Doc ${Math.random()}`, // Randomize to simulate new documents
+    name: `Load Test Doc ${Math.random()}`, 
     docNumber: 'K6-TEST-999',
     expiry: '2030-12-31'
   });
@@ -42,7 +42,7 @@ export default function () {
   const params = {
     headers: { 
       'Content-Type': 'application/json',
-      'x-test-mode': 'true' // 🚦 This tells the backend to skip the Brevo email
+      'x-test-mode': 'true' 
     },
   };
 
