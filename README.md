@@ -76,6 +76,8 @@ SmartDoc is a **cloud-based document expiry reminder system** built using AWS se
 
 
 ## ⚙️ Installation & Setup
+testing
+$env:K6_WEB_DASHBOARD="true"; k6 run loadtest.js
 
 ### 1️⃣ Clone the repository
 ```bash
@@ -89,5 +91,4 @@ GOOGLE_CLIENT_ID=your_client_id
 GOOGLE_CLIENT_SECRET=your_client_secret
 SENDGRID_API_KEY=your_sendgrid_key
 AWS_REGION=your_region
-
 
