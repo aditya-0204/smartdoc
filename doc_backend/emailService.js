@@ -1,4 +1,4 @@
-const sendDocumentEmail = async (userEmail, documentName, documentNo, documentExpiry, userName) => {
+const sendDocumentEmail = async (userEmail, documentName, documentNo, documentExpiry, userName, isReminder = false, reminderDays = null) => {
   if (!process.env.BREVO_API_KEY) return;
 
   let daysLeft = "N/A";
@@ -6,13 +6,20 @@ const sendDocumentEmail = async (userEmail, documentName, documentNo, documentEx
     daysLeft = Math.ceil((new Date(documentExpiry) - new Date()) / (1000 * 60 * 60 * 24));
   }
 
-  // Username ya email se numbers hataane ke liye aur clean karne ke liye
   let displayName = userName;
   if (!displayName && userEmail) {
-    const rawName = userEmail.split('@')[0].replace(/[0-9]/g, ''); // Yeh numbers (jaise 2003) ko hata dega
+    const rawName = userEmail.split('@')[0].replace(/[0-9]/g, '');
     displayName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
   }
   displayName = displayName || "User";
+
+  const subject = isReminder 
+    ? `Action Required: Your document "${documentName}" expires in ${reminderDays !== null ? reminderDays : daysLeft} days!`
+    : `Official Notice: Document Registered - ${documentName}`;
+
+  const mainMessage = isReminder
+    ? `This is a formal reminder that the following registered document is approaching its expiry date:`
+    : `You have successfully added and registered the following document into the SmartDoc system:`;
 
   try {
     const response = await fetch("https://api.brevo.com/v3/smtp/email", {
@@ -25,23 +32,25 @@ const sendDocumentEmail = async (userEmail, documentName, documentNo, documentEx
       body: JSON.stringify({
         sender: { email: "smartdocoffical@gmail.com", name: "SmartDoc Official" },
         to: [{ email: userEmail }],
-        subject: `Official Notice: Document Registered - ${documentName}`,
+        subject: subject,
         htmlContent: `
           <div style="background-color: #f1f5f9; padding: 30px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
             <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); overflow: hidden;">
               
               <!-- Card Header -->
               <div style="background-color: #1e293b; color: #ffffff; padding: 20px 24px; text-align: left;">
-                <h3 style="margin: 0; font-size: 16px; font-weight: 600; letter-spacing: 0.5px;">SMARTDOC System Reminder</h3>
+                <h3 style="margin: 0; font-size: 16px; font-weight: 600; letter-spacing: 0.5px;">
+                  Smartdoc System Reminder
+                </h3>
               </div>
 
               <!-- Card Body -->
               <div style="padding: 24px; color: #334155; line-height: 1.6;">
                 <p style="margin-top: 0; font-size: 15px;">Dear <strong>${displayName}</strong>,</p>
-                <p style="font-size: 15px;">You have successfully added and registered the following document into the SmartDoc system:</p>
+                <p style="font-size: 15px;">${mainMessage}</p>
                 
                 <!-- Structured Info Card Box -->
-                <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #2563eb; padding: 16px; border-radius: 6px; margin: 20px 0;">
+                <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid ${isReminder ? '#dc2626' : '#2563eb'}; padding: 16px; border-radius: 6px; margin: 20px 0;">
                   <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
                     <tr>
                       <td style="padding: 6px 0; color: #64748b; width: 130px;"><strong>document:</strong></td>
@@ -57,12 +66,14 @@ const sendDocumentEmail = async (userEmail, documentName, documentNo, documentEx
                     </tr>
                     <tr>
                       <td style="padding: 6px 0; color: #64748b;"><strong>days left:</strong></td>
-                      <td style="padding: 6px 0; color: #0f172a;"><span style="background-color: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 4px; font-weight: 600; display: inline-block;">${daysLeft} days</span></td>
+                      <td style="padding: 6px 0; color: #0f172a;"><span style="background-color: ${isReminder ? '#fee2e2' : '#dbeafe'}; color: ${isReminder ? '#991b1b' : '#1e40af'}; padding: 2px 8px; border-radius: 4px; font-weight: 600; display: inline-block;">${daysLeft} days</span></td>
                     </tr>
                   </table>
                 </div>
 
-                <p style="font-size: 14px; color: #475569; margin-bottom: 0;">Please keep this record safe for future verification.</p>
+                <p style="font-size: 14px; color: #475569; margin-bottom: 0;">
+                  ${isReminder ? 'Please renew or take necessary action before it expires.' : 'Please keep this record safe for future verification.'}
+                </p>
               </div>
 
               <!-- Card Footer / Disclaimer -->

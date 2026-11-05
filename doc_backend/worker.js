@@ -88,5 +88,50 @@ async function startWorker() {
         console.error("Worker Critical Error:", error);
     }
 }
+const cron = require("node-cron");
+const Document = require("./models/Document");
+const { sendDocumentEmail } = require("./emailService");
+
+// Har roz subah 9:00 baje run hoga ('0 9 * * *')
+cron.schedule("0 9 * * *", async () => {
+  console.log("⏰ Running daily document expiry check...");
+
+  try {
+    const documents = await Document.find({});
+    const today = new Date();
+
+    for (const doc of documents) {
+      if (!doc.expiry || doc.expiry === "N/A") continue;
+
+      const expiryDate = new Date(doc.expiry);
+      const diffTime = expiryDate - today;
+      const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const targetIntervals = [30, 15, 7, 3, 1];
+
+      if (targetIntervals.includes(daysLeft)) {
+        if (!doc.notifiedStages) {
+          doc.notifiedStages = [];
+        }
+
+        if (!doc.notifiedStages.includes(daysLeft)) {
+          console.log(`ending ${daysLeft}-day expiry reminder for document: ${doc.name} to ${doc.userEmail}`);
+          await sendDocumentEmail(
+            doc.userEmail,
+            doc.name,
+            doc.docNumber || doc.id,
+            doc.expiry,
+            null,
+            true,  
+            daysLeft 
+          );
+          doc.notifiedStages.push(daysLeft);
+          await doc.save();
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Error in daily document expiry cron job:", error);
+  }
+});
 
 startWorker();
