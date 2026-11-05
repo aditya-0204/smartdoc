@@ -6,8 +6,13 @@ const sendDocumentEmail = async (userEmail, documentName, documentNo, documentEx
     daysLeft = Math.ceil((new Date(documentExpiry) - new Date()) / (1000 * 60 * 60 * 24));
   }
 
-  // Fallback to email username if explicit user name isn't provided
-  const displayName = userName || userEmail.split('@')[0];
+  // Agar userName nahi hai, toh email prefix ko clean aur capitalized name bana lo (jaise aditya -> Aditya)
+  let displayName = userName;
+  if (!displayName && userEmail) {
+    const rawName = userEmail.split('@')[0];
+    displayName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+  }
+  displayName = displayName || "User";
 
   try {
     const response = await fetch("https://api.brevo.com/v3/smtp/email", {
@@ -33,7 +38,7 @@ const sendDocumentEmail = async (userEmail, documentName, documentNo, documentEx
               <!-- Card Body -->
               <div style="padding: 24px; color: #334155; line-height: 1.6;">
                 <p style="margin-top: 0; font-size: 15px;">Dear <strong>${displayName}</strong>,</p>
-                <p style="font-size: 15px;">You have successfully added and registered the following document into the system:</p>
+                <p style="font-size: 15px;">You have successfully added and registered the following document into the SmartDoc system:</p>
                 
                 <!-- Structured Info Card Box -->
                 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #2563eb; padding: 16px; border-radius: 6px; margin: 20px 0;">
@@ -63,7 +68,7 @@ const sendDocumentEmail = async (userEmail, documentName, documentNo, documentEx
               <!-- Card Footer / Disclaimer -->
               <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 24px; font-size: 11px; color: #64748b; line-height: 1.5;">
                 <strong>Disclaimer:</strong><br/>
-                This message was sent from Vellore Institute of Technology. The contents of this email may contain legally protected confidential or privileged information of “Vellore Institute of Technology”. If you are not the intended recipient, you should not disseminate, distribute or copy this e-mail. Please notify the sender immediately and destroy all copies of this message and any attachments. If you have received this email in error, please promptly notify the sender by reply email and delete the original email and any backup copies without reading them.
+                This message was sent from SmartDoc. The contents of this email may contain legally protected confidential or privileged information of “SmartDoc”. If you are not the intended recipient, you should not disseminate, distribute or copy this e-mail. Please notify the sender immediately and destroy all copies of this message and any attachments. If you have received this email in error, please promptly notify the sender by reply email and delete the original email and any backup copies without reading them.
               </div>
 
             </div>
