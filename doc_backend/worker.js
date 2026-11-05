@@ -1,6 +1,7 @@
 require("dotenv").config();
 const mongoose = require("mongoose");
 const amqp = require("amqplib");
+const cron = require("node-cron");
 const Document = require("./models/Document"); 
 const { sendDocumentEmail } = require("./emailService");
 
@@ -88,9 +89,6 @@ async function startWorker() {
         console.error("Worker Critical Error:", error);
     }
 }
-const cron = require("node-cron");
-const Document = require("./models/Document");
-const { sendDocumentEmail } = require("./emailService");
 
 // Har roz subah 9:00 baje run hoga ('0 9 * * *')
 cron.schedule("0 9 * * *", async () => {
@@ -114,7 +112,7 @@ cron.schedule("0 9 * * *", async () => {
         }
 
         if (!doc.notifiedStages.includes(daysLeft)) {
-          console.log(`ending ${daysLeft}-day expiry reminder for document: ${doc.name} to ${doc.userEmail}`);
+          console.log(`Sending ${daysLeft}-day expiry reminder for document: ${doc.name} to ${doc.userEmail}`);
           await sendDocumentEmail(
             doc.userEmail,
             doc.name,
