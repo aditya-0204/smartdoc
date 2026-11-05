@@ -6,10 +6,10 @@ const sendDocumentEmail = async (userEmail, documentName, documentNo, documentEx
     daysLeft = Math.ceil((new Date(documentExpiry) - new Date()) / (1000 * 60 * 60 * 24));
   }
 
-  // Agar userName nahi hai, toh email prefix ko clean aur capitalized name bana lo (jaise aditya -> Aditya)
+  // Username ya email se numbers hataane ke liye aur clean karne ke liye
   let displayName = userName;
   if (!displayName && userEmail) {
-    const rawName = userEmail.split('@')[0];
+    const rawName = userEmail.split('@')[0].replace(/[0-9]/g, ''); // Yeh numbers (jaise 2003) ko hata dega
     displayName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
   }
   displayName = displayName || "User";
@@ -32,7 +32,7 @@ const sendDocumentEmail = async (userEmail, documentName, documentNo, documentEx
               
               <!-- Card Header -->
               <div style="background-color: #1e293b; color: #ffffff; padding: 20px 24px; text-align: left;">
-                <h3 style="margin: 0; font-size: 16px; font-weight: 600; letter-spacing: 0.5px;">SMARTDOC // OFFICIAL SYSTEM NOTICE</h3>
+                <h3 style="margin: 0; font-size: 16px; font-weight: 600; letter-spacing: 0.5px;">SMARTDOC System Reminder</h3>
               </div>
 
               <!-- Card Body -->
