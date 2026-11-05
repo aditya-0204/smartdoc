@@ -2,18 +2,20 @@ require("dotenv").config();
 const mongoose = require("mongoose");
 const amqp = require("amqplib");
 const Document = require("./models/Document"); 
+const { sendDocumentEmail } = require("./emailService");
 
 const QUEUE_NAME = 'smartdoc_tasks';
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
-const { sendDocumentEmail } = require("./emailService");
+
 app.get('/', (req, res) => {
   res.send('Worker is running and healthy!');
 });
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Worker health check server running on port ${PORT}`);
 });
+
 mongoose
   .connect(process.env.MONGO_URI, {
     maxPoolSize: 100,
@@ -45,6 +47,7 @@ async function startWorker() {
 
                     if (task.type === 'SAVE_DOCUMENT') {
                         const { userEmail, documentName, documentNo, documentExpiry, isTestMode } = task.payload;
+                        
                         // 1. DUPLICATE CHECK 
                         const fiveSecondsAgo = new Date(Date.now() - 5000);
                         const recentDuplicate = await Document.findOne({
@@ -58,6 +61,7 @@ async function startWorker() {
                           channel.ack(msg);
                           return;
                         }
+
                         // 2. MONGODB MEIN DATA SAVE KAREIN
                         const newDoc = await Document.create({
                           userEmail,
@@ -66,32 +70,10 @@ async function startWorker() {
                           expiry: documentExpiry,
                         });
                         
-                        if (!isTestMode){
+                        if (!isTestMode) {
                           console.log("Document saved in DB by worker:", newDoc._id);
+                          // 3. Trigger email service (with Days Left info) cleanly!
                           await sendDocumentEmail(userEmail, documentName, documentNo, documentExpiry);
-                        }
-                        // 3. sending mail from brevo
-                        if (process.env.BREVO_API_KEY && !isTestMode) {
-                          const emailResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
-                            method: "POST",
-                            headers: {
-                              "Accept": "application/json",
-                              "Content-Type": "application/json",
-                              "api-key": process.env.BREVO_API_KEY
-                            },
-                            body: JSON.stringify({
-                              sender: { email: "smartdocoffical@gmail.com", name: "SmartDoc Official" },
-                              to: [{ email: userEmail }],
-                              subject: `${documentName} has been successfully added`,
-                              htmlContent: `<p>Your document ${documentName} has been recorded successfully.</p>`
-                            })
-                          });
-                          
-                          const data = await emailResponse.json();
-                          if (data.messageId) {
-                            console.log(`Email sent to ${userEmail}`);
-                          }
-                        } else if (isTestMode) {
                         }
                     }
                     channel.ack(msg);
