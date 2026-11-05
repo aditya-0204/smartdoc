@@ -16,19 +16,20 @@ export const Dashboard = ({ user, docs, onDeleteDocument, onAddDocument }) => {
     const newDoc = {
       id: scannedData.id || `doc-${Date.now()}`,
       userEmail: user?.email, // logged-in user email
-      name: scannedData.name || scannedData.type || "Untitled",
+      name: scannedData.name || scannedData.type || "Untitled Document",
       docNumber: scannedData.docNumber || scannedData.number || scannedData.id || "N/A",
       documentType: scannedData.type,
-      expiry: scannedData.expiry,
+      expiry: scannedData.expiry || "N/A",
     };
 
     try {
       console.log("Sending document to Lambda:", newDoc, "user email:", user?.email);
 
-      await sendDocumentToLambda(newDoc, user?.email);
-
-      // Add document to frontend state
+      // 1. UI mein turant add kar do taaki refresh na karna pade (Optimistic Update)
       onAddDocument(newDoc);
+
+      // 2. Background queue / backend ko bhej do
+      await sendDocumentToLambda(newDoc, user?.email);
     } catch (error) {
       console.error("Failed to send document to Lambda:", error);
     }
@@ -45,7 +46,7 @@ export const Dashboard = ({ user, docs, onDeleteDocument, onAddDocument }) => {
     if (docToDelete) {
       const idToDelete = docToDelete.id || docToDelete._id;
       onDeleteDocument(idToDelete);
-      setDocToDelete(null);
+      setDocToDelete(null); 
     }
   };
 

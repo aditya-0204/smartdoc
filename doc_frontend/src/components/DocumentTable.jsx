@@ -23,7 +23,7 @@ export const DocumentTable = ({ docs, onDelete }) => {
         <thead className="bg-gray-800 text-gray-300">
           <tr>
             <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Document Name</th>
-            <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Document #</th>
+            <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Document ID</th>
             <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Expiry Date</th>
             <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Status</th>
             <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Actions</th>

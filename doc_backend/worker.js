@@ -7,7 +7,7 @@ const QUEUE_NAME = 'smartdoc_tasks';
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
-
+const { sendDocumentEmail } = require("./emailService");
 app.get('/', (req, res) => {
   res.send('Worker is running and healthy!');
 });
@@ -66,8 +66,10 @@ async function startWorker() {
                           expiry: documentExpiry,
                         });
                         
-                        if (!isTestMode) console.log("Document saved in DB by worker:", newDoc._id);
-
+                        if (!isTestMode){
+                          console.log("Document saved in DB by worker:", newDoc._id);
+                          await sendDocumentEmail(userEmail, documentName, documentNo, documentExpiry);
+                        }
                         // 3. sending mail from brevo
                         if (process.env.BREVO_API_KEY && !isTestMode) {
                           const emailResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
