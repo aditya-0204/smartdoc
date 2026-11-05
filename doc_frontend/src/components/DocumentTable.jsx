@@ -1,4 +1,4 @@
-// src/components/DocumentTable.js
+// src/components/DocumentTable.jsx
 import React from 'react';
 import { getDocumentStatus } from '../utils/dateUtils';
 
@@ -9,18 +9,18 @@ const StatusBadge = ({ status }) => {
     'Expiring Soon': 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300',
     Expired: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
   };
-  return <span className={`${baseClasses} ${colorClasses[status.text]}`}>{status.text}</span>;
+  return <span className={`${baseClasses} ${colorClasses[status.text] || colorClasses['Expiring Soon']}`}>{status.text}</span>;
 };
 
 export const DocumentTable = ({ docs, onDelete }) => {
-  if (docs.length === 0) {
-    return <p className="text-center text-gray-500 dark:text-gray-400 py-8">You haven't added any documents yet.</p>;
+  if (!docs || docs.length === 0) {
+    return <p className="text-center text-gray-400 py-8">You haven't added any documents yet.</p>;
   }
 
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full">
-        <thead className="bg-gray-50 dark:bg-gray-700/50">
+        <thead className="bg-gray-800 text-gray-300">
           <tr>
             <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Document Name</th>
             <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Document #</th>
@@ -29,17 +29,25 @@ export const DocumentTable = ({ docs, onDelete }) => {
             <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Actions</th>
           </tr>
         </thead>
-        <tbody className="text-gray-700 dark:text-gray-300">
-          {docs.map(doc => {
-            const status = getDocumentStatus(doc.expiry);
+        <tbody className="text-gray-100 divide-y divide-gray-700">
+          {docs.map((doc, index) => {
+            const docId = doc.id || doc._id || `doc-${index}`;
+            const docName = doc.name || doc.documentType || doc.type || "Untitled Document";
+            const docNum = doc.docNumber || doc.documentNumber || doc.number || "N/A";
+            const docExpiry = doc.expiry || doc.expiryDate || "N/A";
+            const status = getDocumentStatus(docExpiry);
+
             return (
-              <tr key={doc.id} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                <td className="py-3 px-4">{doc.name}</td>
-                <td className="py-3 px-4 font-mono text-sm">{doc.docNumber}</td>
-                <td className="py-3 px-4">{doc.expiry}</td>
+              <tr key={docId} className="border-b border-gray-700 hover:bg-gray-800/50 transition">
+                <td className="py-3 px-4 font-medium text-white">{docName}</td>
+                <td className="py-3 px-4 font-mono text-sm text-gray-200">{docNum}</td>
+                <td className="py-3 px-4 text-gray-200">{docExpiry}</td>
                 <td className="py-3 px-4"><StatusBadge status={status} /></td>
                 <td className="py-3 px-4">
-                  <button onClick={() => onDelete(doc.id)} className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-500 font-medium text-sm">
+                  <button
+                    onClick={() => onDelete(docId)}
+                    className="text-red-400 hover:text-red-300 font-medium text-sm"
+                  >
                     Delete
                   </button>
                 </td>

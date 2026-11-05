@@ -1,6 +1,7 @@
 // src/pages/dashboard.jsx
 
-import React, { useState, Fragment } from "react";
+import React, { useState, useEffect, Fragment } from "react";
+import { useLocation } from "react-router-dom";
 import { Menu, Transition } from "@headlessui/react";
 import {
   SunIcon,
@@ -12,19 +13,47 @@ import {
 import { Dashboard as DashboardContent } from "../components/Dashboard.jsx";
 
 const DashboardPage = () => {
+  const location = useLocation();
   const [darkMode, setDarkMode] = useState(false);
-  const [user] = useState({
-    name: "Shaurya",
-    email: "shaurya@example.com",
+
+  // Login se aayi hui email capture karo
+  const userEmail = location.state?.email || "adityakumawat2003@gmail.com";
+
+  const [user, setUser] = useState({
+    name: "Aditya Kumawat",
+    email: userEmail,
   });
+  
   const [docs, setDocs] = useState([]);
+
+  // ✅ FIX: Page load hote hi database se user ke documents fetch karo
+  useEffect(() => {
+    const fetchUserDocuments = async () => {
+      try {
+        const response = await fetch(`https://smartdoc-nj3x.onrender.com/documents?email=${user.email}`);
+        const data = await response.json();
+        if (response.ok) {
+          // Check karo ki data array hai ya nahi, aur state update karo
+          setDocs(Array.isArray(data) ? data : data.documents || []);
+        } else {
+          console.error("Failed to fetch documents:", data.message);
+        }
+      } catch (error) {
+        console.error("Error fetching documents:", error);
+      }
+    };
+
+    if (user.email) {
+      fetchUserDocuments();
+    }
+  }, [user.email]);
 
   const handleAddDocument = (newDoc) => {
     setDocs((prevDocs) => [...prevDocs, newDoc]);
   };
 
   const handleDeleteDocument = (docId) => {
-    setDocs((prevDocs) => prevDocs.filter((doc) => doc.id !== docId)); // ✅ matches id
+    setDocs((prevDocs) => prevDocs.filter((doc) => doc.id !== docId && doc._id !== docId));
   };
 
   const toggleDarkMode = () => {

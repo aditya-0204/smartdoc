@@ -18,7 +18,8 @@ function Login() {
       const data = await response.json();
       if (response.ok) {
         alert("Login successful");
-        navigate("/dashboard");
+        // ✅ Login ke baad real email dashboard par pass kar di
+        navigate("/dashboard", { state: { email: email } });
       } else {
         alert(data.message || "Login failed");
       }
